@@ -3,134 +3,108 @@ using System.Collections;
 using System.Collections.Generic;
 
 public class AudioVisualizer : MonoBehaviour {
-	// audio elements
-	private AudioSource aSource;
-	public float[] samples = new float[64]; //A float array that stores the audio samples
-
-	// visual elements
-	private LineRenderer lRenderer;
-	public GameObject cube;
-	private Transform goTransform;
-	private Vector3 cubePos;
-
-	private Transform[] cubesTransform; //An array that stores the Transforms of all instantiated cubes
-	private Vector3 gravity = new Vector3(0.0f,1.0f,0.0f); //The velocity that the cubes will drop
-
-	private float altitude = 60f;
-
 
 	List<AudioSource> audioSources = new List<AudioSource>();
+	List<AudioVisualTrack> audioTracks = new List<AudioVisualTrack>();
+	public GameObject audioTrack;
 	
-
-	void Awake () {
-		//Get and store a reference to the following attached components: 
-		//AudioSource
-		//this.aSource = GetComponent<AudioSource>();
-		//LineRenderer
-		this.lRenderer = GetComponent<LineRenderer>();
-		//Transform
-		this.goTransform = GetComponent<Transform>();
-	}
-	
-	void Start() {
-		//The line should have the same number of points as the number of samples
-		lRenderer.SetVertexCount(samples.Length + 1);
-		//The cubesTransform array should be initialized with the same length as the samples array
-		cubesTransform = new Transform[samples.Length];
-		//Center the audio visualization line at the X axis, according to the samples array length
-		goTransform.position = new Vector3(-samples.Length / 2, goTransform.position.y, goTransform.position.z);
-		
-		//Create a temporary GameObject, that will serve as a reference to the most recent cloned cube
-		GameObject tempCube;
-		
-		//For each sample
-		for(int i= 0; i< samples.Length; i++) {
-			//Instantiate a cube placing it at the right side of the previous one
-			tempCube = (GameObject) Instantiate(cube, new Vector3(goTransform.position.x + i * 1, goTransform.position.y, goTransform.position.z),Quaternion.identity);
-			//Get the recently instantiated cube Transform component
-			cubesTransform[i] = tempCube.GetComponent<Transform>();
-			//Make the cube a child of this game object
-			cubesTransform[i].parent = goTransform;
-
-			//cubesTransform[i].gameObject.SetActive(false);
-		}
-	}
-	
-	void LateUpdate () {
+	void Update () {
 		if (Input.GetMouseButtonUp(0)) {
-			setAudioSource();
+			setAudioTrack();
 		}
 
-		if (aSource != null) {
-			updateAudioSpectrum();
+
+		if (Input.GetMouseButtonUp(1)) {
+			removeAudioTrack(Random.Range(0, audioSources.Count));
 		}
 	}
 
 
-	void setAudioSource () {
+	private string getRandomFileName () {
 		// get music folder
-		string path = "Music/rekkerd music production 2013"; //"Music/rekkerd one sequence"; //"Music/rekkerd music contest moving 2011"; //"Music/rekkerd no-kick pack";
+		List<string> folders = FileUtility.GetDirectoryNames("Assets/Resources/Music/");
+		/*for (int i = 0; i < folders.Count; i++) {
+			print (i + "/" + folders.Count + " ---> " + folders[i]);
+		}*/
+
+
+
+		string path = "Music/" + folders[Random.Range(0, folders.Count)]; //"Music/rekkerd free loops 06"; //"Music/rekkerd music contest moving 2011"; //"Music/rekkerd music production 2013"; //"Music/rekkerd one sequence"; //"Music/rekkerd music contest moving 2011"; //"Music/rekkerd no-kick pack";
+		//string path = "Music/rekkerd free loops 03";
+		string fileName = null;
+
+		
 
 		// get a list of all files inside music folder
 		List<string> fileNames = FileUtility.GetFilesInDirectory("Assets/Resources/" + path);
-		for (int i = 0; i < fileNames.Count; i++) {
+		/*for (int i = 0; i < fileNames.Count; i++) {
 			print (i + "/" + fileNames.Count + " ---> " + fileNames[i]);
-		}
+		}*/
 
-		// get a random music file from existing ones
-		int n = Random.Range(0, fileNames.Count);
-		string fileName = path + "/" + fileNames[n];
-		print (n + " = " + fileName);
+		bool ok = false;
+		while (ok == false) {
+			// get a random music file from existing ones
+			int n = Random.Range(0, fileNames.Count);
+			fileName = path + "/" + fileNames[n];
+			print (n + " = " + fileName);
 
-		// play the audio source and get a reference to it
-		int sample = 0;
-		if (aSource != null) {
-			sample = aSource.timeSamples;
-
-			for (int i = 0; i < audioSources.Count; i++) {
-				AudioSource audioSource = audioSources[i];
-				int r = Random.Range(1, 100);
-				if (r <= 60) {
-					audioSources.Remove(audioSource);
-					audioSource.Stop();
-					Destroy(audioSource);
+			// make sure that this file is not already playing
+			ok = true;
+			for (int i = 0; i < audioTracks.Count; i++) {
+				AudioVisualTrack audioTrack = audioTracks[i];
+				if (fileName == audioTrack.aSource.clip.name) {
+					ok = false;
 				}
 			}
-			
 		}
-		
-		aSource = Audio.playAtSample(fileName, sample, true);
-		audioSources.Add(aSource);
+
+		return fileName;
 	}
 
+	
+	private void setAudioTrack () {
+		// get random loop to play
+		string fileName = getRandomFileName();
 
-	void updateAudioSpectrum () {
+		// get sample time of first track
+		int sample = audioSources.Count > 0 ? audioSources[0].timeSamples : 0;
 
-		//Obtain the samples from the frequency bands of the attached AudioSource
-		aSource.GetSpectrumData(this.samples,0,FFTWindow.BlackmanHarris);
-		
-		//For each sample
-		for(int i = 0; i < samples.Length; i++) {
-			// Set the cubePos Vector3 to the same value as the position of the corresponding cube. 
-			// However, set it's Y element according to the current sample.
-			cubePos.Set(cubesTransform[i].position.x, Mathf.Clamp(samples[i] * (altitude + i * i), -altitude, altitude), cubesTransform[i].position.z);
-			
-			//If the new cubePos.y is greater than the current cube position
-			if(cubePos.y >= cubesTransform[i].position.y) {
-				//Set the cube to the new Y position
-				cubesTransform[i].position = cubePos;
-			} else {
-				//The spectrum line is below the cube, make it fall
-				cubesTransform[i].position -= gravity;
+		// consider if we should remove a soundtrack
+		/*if (audioSources.Count > 1) {
+			for (int i = 0; i < audioSources.Count; i++) {
+				int r = Random.Range(1, 100);
+				if (r <= 60) { removeAudioTrack(i); }
 			}
-			
-			/*Set the position of each vertex of the line based on the cube position.
-			 * Since this method only takes absolute World space positions, it has 
-			 * been subtracted by the current game object position.*/
-			lRenderer.SetPosition(i + 1, cubePos - goTransform.position);
-		}
-
-
+		}*/
 		
+		// play the audio source and get a reference to it
+		AudioSource aSource = Audio.playAtSample(fileName, sample, true);
+		audioSources.Add(aSource);
+
+		// Instantiate track gameobject
+		GameObject obj = (GameObject) Instantiate(audioTrack, Vector3.zero, Quaternion.identity);
+		obj.transform.parent = transform;
+
+		Color color = new Color(Random.Range(0f, 1f), Random.Range(0f, 1f), Random.Range(0f, 1f));
+		
+		AudioVisualTrack track = obj.GetComponent<AudioVisualTrack>();
+		track.init(aSource, color);
+
+		audioTracks.Add(track);
 	}
+
+
+	private void removeAudioTrack (int num) {
+		AudioVisualTrack aTrack = audioTracks[num];
+		audioTracks.Remove(aTrack);
+		Destroy(aTrack.gameObject);
+
+		AudioSource audioSource = audioSources[num];
+		audioSources.Remove(audioSource);
+		audioSource.Stop();
+		Destroy(audioSource);
+	}
+
+
+	
 }
